@@ -36,8 +36,18 @@ public class Main {
 
     private Map<String, Map<String, String>> mTypeNameMap;
 
+    /**
+     * 由旧的id映射到新的id
+     */
+    private Map<String, String> mValueMap = new HashMap<>();
+
+
+    private static final String workPath = "G:\\Java\\public\\app";
+
     public static void main(String[] args) {
-        File publicFile = new File("G:\\Java\\public\\app\\res\\values\\public.xml");
+
+
+        File publicFile = new File(linkPath(workPath, new String[]{"res", "values", "public.xml"}));
 
         Main main = new Main();
         try {
@@ -45,14 +55,30 @@ public class Main {
         } catch (Exception e) {
             e.printStackTrace();
         }
-        File smaliFile = new File("G:\\Java\\public\\app\\smali\\android\\support\\percent");
+        File smaliFile = new File(linkPath(workPath, new String[]{"smali"}));
         main.parseFiles(smaliFile);
         main.changeRFileWithPublic();
+        main.checkSmaliFile();
+        main.printAmendFile();
     }
 
-    private void printRFile() {
-        for (File tempFile : mRFiles) {
-            System.out.println("clm ==> R_File: " + tempFile.getPath());
+    private static String linkPath(String basePath, String[] dentrys) {
+
+        StringBuilder stringBuilder = new StringBuilder(basePath);
+        for (String dentry : dentrys) {
+            stringBuilder.append(File.separator);
+            stringBuilder.append(dentry);
+        }
+        return stringBuilder.toString();
+    }
+
+    private void printAmendFile() {
+        for (File tempFile : mAmendNotRFiles) {
+            System.out.println("clm ==> mAmendNotRFiles: " + tempFile.getPath());
+        }
+
+        for (File tempFile : mAmendRFiles) {
+            System.out.println("clm ==> mAmendRFiles: " + tempFile.getPath());
         }
 
     }
@@ -81,7 +107,8 @@ public class Main {
     private void changeRFileWithPublic() {
         for (File tempFile : mRFiles) {
             String fileName = tempFile.getName();
-            File tempOutPutFile = new File("G:\\Java\\temp" + File.separator + fileName);
+            File tempOutPutFile = new File(tempFile.getPath().replace(workPath, linkPath(workPath, new String[]{"workSpace", "amend"})));
+            createDirs(tempOutPutFile);
             System.out.println("clm file ==> " + tempFile.toPath());
             System.out.println("clm fileName ==> " + fileName);
 
@@ -93,6 +120,7 @@ public class Main {
             System.out.println("clm resType ==> " + resType);
 
             if (resType.equals("styleable")) {
+                changeStyleableRFile(tempFile);
                 continue;
             }
 
@@ -111,6 +139,19 @@ public class Main {
                         System.out.println("clm resNameLenght: " + resName.length());
                         String affirmId = nameTypeMap.get(resName);
                         System.out.println("clm affirmId " + affirmId);
+                        if (resValue != null) {
+                            if (mValueMap.containsKey(resValue)) {
+                                String existId = mValueMap.get(resValue);
+                                if (existId != null && affirmId != null && !existId.equals(affirmId)) {
+                                    System.err.println("映射可能出错，解析旧R文件存在多个相同id");
+                                    System.err.println("原apk可能存在id冲突  : " + existId + "  " + affirmId);
+                                    System.out.println("已存在映射： " + resValue + "=" + existId);
+                                    System.out.println("更新为： " + resValue + "=" + affirmId);
+                                }
+
+                            }
+                            mValueMap.put(resValue, affirmId);
+                        }
                         lineString = amendLine(lineString, resValue, affirmId);
                     }
 
@@ -130,6 +171,12 @@ public class Main {
             mAmendRFiles.add(tempFile);
         }
 
+    }
+
+    private void createDirs(File tempOutPutFile) {
+        if (!tempOutPutFile.getParentFile().exists()) {
+            tempOutPutFile.getParentFile().mkdirs();
+        }
     }
 
     /**
@@ -156,7 +203,11 @@ public class Main {
         String resValue = null;
         if (line.contains("0x7f")) {
             int startIndex = line.indexOf("0x7f");
-            resValue = line.substring(startIndex, startIndex + 10);
+            try {
+                resValue = line.substring(startIndex, startIndex + 10);
+            } catch (Exception e) {
+                System.err.println("clm getHexString error");
+            }
         }
 
         return resValue;
@@ -210,7 +261,60 @@ public class Main {
      * key 是原始的id值
      * value 是type_name
      */
-    private void parseRSmaliFile() {
-        Map<String, String> idMap = new HashMap<>();
+    private void checkSmaliFile() {
+        for (File tempFile : mNotRFiles) {
+            System.out.println("clm checkSmaliFile ==> " + tempFile);
+            File tempOutPutFile = new File(tempFile.getPath().replace(workPath, linkPath(workPath, new String[]{"workSpace", "amend"})));
+            createDirs(tempOutPutFile);
+            try {
+                FileReader fileReader = new FileReader(tempFile);
+                StringBuilder stringBuilder = new StringBuilder();
+                char[] chars = new char[1024];
+                int length = 0;
+                while (length != -1) {
+                    length = fileReader.read(chars);
+                    stringBuilder.append(chars);
+                }
+                fileReader.close();
+                String fileCount = stringBuilder.toString();
+                if (fileCount.contains("0x7f")) {
+                    System.out.println("clm checkSmaliFile has  ==> " + tempFile);
+                    generateAmendFile(tempFile, tempOutPutFile, mAmendNotRFiles);
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private void generateAmendFile(File tempFile, File tempOutPutFile, List<File> recordList) throws IOException {
+        BufferedReader bufferedReader = new BufferedReader(new FileReader(tempFile));
+        BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(tempOutPutFile));
+        String lineString = bufferedReader.readLine();
+        while (lineString != null) {
+//                        可能是旧的R文件值
+            String resValue = getHexString(lineString);
+            if (resValue != null) {
+//                             从value 映射拿到最新的值，可能存在多个映射, 需要注意
+                String targetValue = mValueMap.get(resValue);
+                lineString = amendLine(lineString, resValue, targetValue);
+            }
+            bufferedWriter.write(lineString + "\r\n");
+            lineString = bufferedReader.readLine();
+        }
+        bufferedWriter.flush();
+        bufferedWriter.close();
+        bufferedReader.close();
+        recordList.add(tempFile);
+    }
+
+    private void changeStyleableRFile(File styleableFile) {
+        File tempOutPutFile = new File(styleableFile.getPath().replace(workPath, linkPath(workPath, new String[]{"workSpace", "amend"})));
+        createDirs(tempOutPutFile);
+        try {
+            generateAmendFile(styleableFile, tempOutPutFile, mAmendRFiles);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 }
