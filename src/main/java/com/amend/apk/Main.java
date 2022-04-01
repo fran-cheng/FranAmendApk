@@ -2,8 +2,6 @@ package com.amend.apk;
 
 import com.amend.utils.FileUtils;
 
-import java.io.*;
-
 /**
  * @author 程良明
  * @date 2022/3/30
@@ -11,23 +9,17 @@ import java.io.*;
  **/
 public class Main {
 
-    private static final String workPath = "G:\\Java\\public\\app";
 
     public static void main(String[] args) {
+        String workPath = "G:\\Java\\public\\app";
+        String packageName = "heiqi.demo";
+        boolean saveFiles = true;
+        boolean changeOtherFiles = true;
 
-        FileUtils fileUtils = new FileUtils(workPath);
+        FileUtils fileUtils = new FileUtils(workPath, null, saveFiles, changeOtherFiles);
+        fileUtils.execute();
 
-        File smaliFile = new File(fileUtils.linkPath(workPath, new String[]{"smali"}));
 
-        fileUtils.parseFiles(smaliFile);
-
-//        fileUtils.saveOriginalFiles(false);
-
-        fileUtils.generateRFile();
-
-        fileUtils.generateOtherFiles();
-
-        fileUtils.finish();
     }
 
 

@@ -1,10 +1,7 @@
 package com.amend.utils;
 
 import java.io.*;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * @author 程良明
@@ -54,10 +51,14 @@ public class FileUtils {
     private List<File> mOtherFiles = new ArrayList<>();
 
     private boolean usePackageTemplate = false;
+    private boolean saveFiles = false;
+    private boolean changeOtherFiles = false;
 
-    public FileUtils(String workPath) {
+    public FileUtils(String workPath, String packageName, boolean saveFiles, boolean changeOtherFiles) {
         mWorkPath = workPath;
-        mPackageName = "heiqi.demo";
+        mPackageName = packageName;
+        this.saveFiles = saveFiles;
+        this.changeOtherFiles = changeOtherFiles;
 
         if (mPackageName != null) {
             mPackageTemplate = new HashMap<>();
@@ -74,12 +75,42 @@ public class FileUtils {
         }
     }
 
+    public void execute() {
+
+        delDir(new File(linkPath(mWorkPath, new String[]{KEY_WORK_SPACE})));
+
+        initAllFiles();
+
+        generateAmendFiles();
+
+        saveOriginalFiles();
+
+        finish();
+    }
+
+    private void initAllFiles() {
+        File workRootFile = new File(mWorkPath);
+        for (File tempFile : Objects.requireNonNull(workRootFile.listFiles())) {
+            if (tempFile.getName().startsWith("smali")) {
+                parseFiles(tempFile);
+            }
+        }
+    }
+
+    private void generateAmendFiles() {
+        generateRFile();
+
+        if (changeOtherFiles) {
+            generateOtherFiles();
+        }
+    }
+
     /**
      * 解析文件夹
      *
      * @param file 文件夹
      */
-    public void parseFiles(File file) {
+    private void parseFiles(File file) {
         if (file.isDirectory()) {
             File[] tempList = file.listFiles();
             assert tempList != null;
@@ -97,18 +128,27 @@ public class FileUtils {
 
     /**
      * 保存修改前的文件
-     *
-     * @param all 是否保存全部，默认保存R文件
      */
-    public void saveOriginalFiles(boolean all) {
-        copyOriginalFiles(mRFiles);
-        if (all) {
-            copyOriginalFiles(mOtherFiles);
+    private void saveOriginalFiles() {
+
+        if (saveFiles) {
+            if (changeOtherFiles) {
+                List<File> needAmendFiles = new ArrayList<>();
+                for (File tempFile : mAmendFiles) {
+                    File needAmendFile = new File(tempFile.getPath().replace(mAmendPath, mWorkPath));
+                    needAmendFiles.add(needAmendFile);
+                }
+//                needAmendFiles.addAll(mRFiles);
+                copyOriginalFiles(needAmendFiles);
+            } else {
+                copyOriginalFiles(mRFiles);
+            }
         }
+
     }
 
 
-    public void generateRFile() {
+    private void generateRFile() {
         for (File tempFile : mRFiles) {
             String fileName = tempFile.getName();
             File tempOutPutFile = new File(tempFile.getPath().replace(mWorkPath, mAmendPath));
@@ -122,12 +162,12 @@ public class FileUtils {
                 continue;
             }
 
-
             Map<String, String> nameTypeMap = mTypeNameMap.get(resType);
             try (BufferedReader bufferedReader = new BufferedReader(new FileReader(tempFile));
                  BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(tempOutPutFile))) {
                 String lineString = bufferedReader.readLine();
                 while (lineString != null) {
+
                     String[] resSource = parseRFileLine(lineString);
                     if (resSource != null) {
                         String resName = resSource[0];
@@ -170,7 +210,7 @@ public class FileUtils {
                 e.printStackTrace();
             }
 
-            mAmendFiles.add(tempFile);
+            mAmendFiles.add(tempOutPutFile);
         }
 
     }
@@ -293,7 +333,7 @@ public class FileUtils {
         } catch (IOException e) {
             e.printStackTrace();
         }
-        mAmendFiles.add(tempFile);
+        mAmendFiles.add(tempOutPutFile);
     }
 
 
@@ -304,19 +344,16 @@ public class FileUtils {
     public void generateOtherFiles() {
         for (File tempFile : mOtherFiles) {
             File tempOutPutFile = new File(tempFile.getPath().replace(mWorkPath, mAmendPath));
-            createDirs(tempOutPutFile);
-            try {
-                FileReader fileReader = new FileReader(tempFile);
+            try (FileReader fileReader = new FileReader(tempFile)) {
                 StringBuilder stringBuilder = new StringBuilder();
                 char[] chars = new char[1024];
-                int length = 0;
-                while (length != -1) {
-                    length = fileReader.read(chars);
-                    stringBuilder.append(chars);
+                int length;
+                while ((length = fileReader.read(chars)) != -1) {
+                    stringBuilder.append(chars, 0, length);
                 }
-                fileReader.close();
                 String fileCount = stringBuilder.toString();
                 if (fileCount.contains(KEY_HEX)) {
+                    createDirs(tempOutPutFile);
                     generateAmendFile(tempFile, tempOutPutFile);
                 }
             } catch (IOException e) {
@@ -348,10 +385,9 @@ public class FileUtils {
         try (FileReader fileReader = new FileReader(tempFile);
              FileWriter fileWriter = new FileWriter(outPutFile)) {
             char[] chars = new char[1024];
-            int length = fileReader.read(chars);
-            while (length != -1) {
-                fileWriter.write(chars);
-                length = fileReader.read(chars);
+            int length;
+            while ((length = fileReader.read(chars)) != -1) {
+                fileWriter.write(chars, 0, length);
             }
             fileWriter.flush();
 
@@ -363,12 +399,29 @@ public class FileUtils {
     /**
      * 替换修改后的文件为原来文件
      */
-    public void finish() {
+    private void finish() {
+
         for (File tempFile : mAmendFiles) {
+
             String outPutPath = tempFile.getPath().replace(mAmendPath, mWorkPath);
             File outPutFile = new File(outPutPath);
             copyOperation(tempFile, outPutFile);
-            // TODO: 2022/4/1 删除文件
         }
+
+        if (!saveFiles) {
+            delDir(new File(linkPath(mWorkPath, new String[]{KEY_WORK_SPACE})));
+        }
+
+    }
+
+    private void delDir(File file) {
+        if (file.isDirectory()) {
+            File[] list = file.listFiles();
+            assert list != null;
+            for (File f : list) {
+                delDir(f);
+            }
+        }
+        file.delete();
     }
 }
