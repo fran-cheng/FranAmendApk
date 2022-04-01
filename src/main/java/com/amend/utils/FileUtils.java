@@ -16,6 +16,12 @@ public class FileUtils {
     private static final String KEY_WORK_SPACE = "workSpace";
     private static final String KEY_AMEND = "amend";
     private static final String KEY_ORIGINAL = "original";
+    private static final String KEY_COLON = ":";
+    private String mOriginalPath;
+    private String mAmendPath;
+    /**
+     * 由resType和resName来确定id
+     */
     private static Map<String, Map<String, String>> mTypeNameMap;
     /**
      * 修正后的文件
@@ -26,6 +32,10 @@ public class FileUtils {
      */
     private Map<String, String> mValueMap = new HashMap<>();
     /**
+     * 由旧的id映射到resType_resName
+     */
+    private Map<String, String> mOriginalMap = new HashMap<>();
+    /**
      * 保存源来apk 就存在的id冲突，并通过这个来尝试修复，其实如果不使用的话问题不大
      */
     private Map<String, String> mMultipleOldId = new HashMap<>();
@@ -33,12 +43,29 @@ public class FileUtils {
      * 工作路径，指apktool解压后的路径
      */
     private final String mWorkPath;
+    private final String mPackageName;
+
+    /**
+     * 包名下的R文件映射
+     */
+    private Map<String, String> mPackageTemplate;
 
     private List<File> mRFiles = new ArrayList<>();
     private List<File> mOtherFiles = new ArrayList<>();
 
+    private boolean usePackageTemplate = false;
+
     public FileUtils(String workPath) {
         mWorkPath = workPath;
+        mPackageName = "heiqi.demo";
+
+        if (mPackageName != null) {
+            mPackageTemplate = new HashMap<>();
+            usePackageTemplate = true;
+        }
+
+        mOriginalPath = linkPath(mWorkPath, new String[]{KEY_WORK_SPACE, KEY_ORIGINAL});
+        mAmendPath = linkPath(mWorkPath, new String[]{KEY_WORK_SPACE, KEY_AMEND});
         File publicFile = new File(linkPath(workPath, new String[]{"res", "values", "public.xml"}));
         try {
             mTypeNameMap = XmlPullParsePublicXml.parsePublicXml(publicFile);
@@ -84,7 +111,7 @@ public class FileUtils {
     public void generateRFile() {
         for (File tempFile : mRFiles) {
             String fileName = tempFile.getName();
-            File tempOutPutFile = new File(tempFile.getPath().replace(mWorkPath, linkPath(mWorkPath, new String[]{KEY_WORK_SPACE, KEY_AMEND})));
+            File tempOutPutFile = new File(tempFile.getPath().replace(mWorkPath, mAmendPath));
             createDirs(tempOutPutFile);
             int startIndex = fileName.lastIndexOf('$') + 1;
             int endIndex = fileName.lastIndexOf(".smali");
@@ -107,24 +134,28 @@ public class FileUtils {
                         String resValue = resSource[1];
                         String affirmId = nameTypeMap.get(resName);
                         if (resValue != null) {
-                            if (mValueMap.containsKey(resValue)) {
-                                if (mMultipleOldId.containsKey(affirmId)) {
-
-                                    continue;
-                                }
+                            String typeAndName = String.format("%s:%s", resType, resName);
+                            if (mValueMap.containsKey(resValue) && !mMultipleOldId.containsKey(affirmId)) {
                                 String existId = mValueMap.get(resValue);
                                 if (existId != null && affirmId != null && !existId.equals(affirmId)) {
-                                    System.err.println("映射可能出错，解析旧R文件存在多个相同id");
-                                    System.err.println("原apk可能存在id冲突  : " + existId + "  " + affirmId);
-                                    System.out.println("已存在映射： " + resValue + "=" + existId);
-                                    System.out.println("更新为： " + resValue + "=" + affirmId);
+                                    String existTypeName = mOriginalMap.get(resValue);
+                                    String info = String.format("APK 可能存在Id %s  冲突,资源%s和%s", resValue, resName, existTypeName.split(KEY_COLON)[1]);
+                                    System.err.println(info);
 
-                                    mMultipleOldId.put(existId, resValue);
-                                    mMultipleOldId.put(affirmId, resValue);
+                                    mMultipleOldId.put(existId, existTypeName);
+                                    mMultipleOldId.put(affirmId, typeAndName);
                                 }
 
                             }
+                            mOriginalMap.put(resValue, typeAndName);
                             mValueMap.put(resValue, affirmId);
+                            if (usePackageTemplate) {
+                                String key = linkPath(mPackageName.replace(".", File.separator), new String[]{"R$"});
+                                if (tempFile.getPath().contains(key)) {
+                                    mPackageTemplate.put(typeAndName, resValue);
+                                }
+                            }
+
                         }
                         lineString = amendLine(lineString, resValue, affirmId);
                     }
@@ -178,7 +209,7 @@ public class FileUtils {
      * @param styleableFile file
      */
     private void changeStyleableRFile(File styleableFile) {
-        File tempOutPutFile = new File(styleableFile.getPath().replace(mWorkPath, linkPath(mWorkPath, new String[]{KEY_WORK_SPACE, KEY_AMEND})));
+        File tempOutPutFile = new File(styleableFile.getPath().replace(mWorkPath, mAmendPath));
         createDirs(tempOutPutFile);
         generateAmendFile(styleableFile, tempOutPutFile);
     }
@@ -192,7 +223,7 @@ public class FileUtils {
     private String[] parseRFileLine(String line) {
         String[] resSource = null;
         if (line.startsWith(".field public static final")) {
-            String[] strings = line.split(":");
+            String[] strings = line.split(KEY_COLON);
             String resName = strings[0].substring(strings[0].lastIndexOf(" ") + 1);
             String resValue = getHexString(strings[1]);
             resSource = new String[2];
@@ -240,10 +271,18 @@ public class FileUtils {
                 String resValue = getHexString(lineString);
                 if (resValue != null) {
 //                             从value 映射拿到最新的值，可能存在多个映射, 需要注意
-                    if (mMultipleOldId.containsKey(resValue)) {
-                        // TODO: 2022/4/1  通过一些方法来确定 使用那个id来匹配，    使用原包名下的R文件做模板？！匹配的概率最大，然后就是根据路径最近？！
-                    }
                     String targetValue = mValueMap.get(resValue);
+                    if (mMultipleOldId.containsKey(resValue)) {
+                        System.err.println("Path： " + tempFile);
+                        System.err.println("替换的资源id可能存在冲突，请悉知");
+//                        使用包名下的文件的id来确定值
+                        if (usePackageTemplate) {
+                            String[] typeAndName = mPackageTemplate.get(resValue).split(KEY_COLON);
+                            targetValue = mTypeNameMap.get(typeAndName[0]).get(typeAndName[1]);
+                        }
+
+                    }
+
                     lineString = amendLine(lineString, resValue, targetValue);
                 }
                 bufferedWriter.write(lineString + "\r\n");
@@ -264,7 +303,7 @@ public class FileUtils {
      */
     public void generateOtherFiles() {
         for (File tempFile : mOtherFiles) {
-            File tempOutPutFile = new File(tempFile.getPath().replace(mWorkPath, linkPath(mWorkPath, new String[]{KEY_WORK_SPACE, KEY_AMEND})));
+            File tempOutPutFile = new File(tempFile.getPath().replace(mWorkPath, mAmendPath));
             createDirs(tempOutPutFile);
             try {
                 FileReader fileReader = new FileReader(tempFile);
@@ -292,23 +331,44 @@ public class FileUtils {
      */
     private void copyOriginalFiles(List<File> files) {
         for (File tempFile : files) {
-            String outPutPath = tempFile.getPath().replace(mWorkPath, linkPath(mWorkPath, new String[]{KEY_WORK_SPACE, KEY_ORIGINAL}));
+            String outPutPath = tempFile.getPath().replace(mWorkPath, mOriginalPath);
             File outPutFile = new File(outPutPath);
             createDirs(outPutFile);
-            try (FileReader fileReader = new FileReader(tempFile);
-                 FileWriter fileWriter = new FileWriter(outPutFile)) {
-                char[] chars = new char[1024];
-                int length = fileReader.read(chars);
-                while (length != -1) {
-                    fileWriter.write(chars);
-                    length = fileReader.read(chars);
-                }
-                fileWriter.flush();
-
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            copyOperation(tempFile, outPutFile);
         }
     }
 
+    /**
+     * 拷贝的具体操作
+     *
+     * @param tempFile   输入
+     * @param outPutFile 输出
+     */
+    private void copyOperation(File tempFile, File outPutFile) {
+        try (FileReader fileReader = new FileReader(tempFile);
+             FileWriter fileWriter = new FileWriter(outPutFile)) {
+            char[] chars = new char[1024];
+            int length = fileReader.read(chars);
+            while (length != -1) {
+                fileWriter.write(chars);
+                length = fileReader.read(chars);
+            }
+            fileWriter.flush();
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * 替换修改后的文件为原来文件
+     */
+    public void finish() {
+        for (File tempFile : mAmendFiles) {
+            String outPutPath = tempFile.getPath().replace(mAmendPath, mWorkPath);
+            File outPutFile = new File(outPutPath);
+            copyOperation(tempFile, outPutFile);
+            // TODO: 2022/4/1 删除文件
+        }
+    }
 }

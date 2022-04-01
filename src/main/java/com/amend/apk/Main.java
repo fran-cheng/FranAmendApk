@@ -21,11 +21,13 @@ public class Main {
 
         fileUtils.parseFiles(smaliFile);
 
-        fileUtils.saveOriginalFiles(false);
+//        fileUtils.saveOriginalFiles(false);
 
         fileUtils.generateRFile();
 
         fileUtils.generateOtherFiles();
+
+        fileUtils.finish();
     }
 
 
