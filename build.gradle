@@ -22,6 +22,7 @@ dependencies {
 
 
 String outDir = 'out/FranAmendApk'
+String outToolDir = 'tool'
 
 jar {
     String classPath = ""
@@ -43,14 +44,19 @@ task copyLibs(type: Copy) {
     from configurations.runtimeClasspath
     into "${outDir}/libs"
 }
+task copy2ToolJar(type: Copy, dependsOn: [copyJar, copyLibs]) {
+    from "${outDir}"
 
-task copyProperties(type: Copy) {
-    from 'properties'
-    into "${outDir}/properties"
+    into "${outToolDir}"
+
+    rename { String fileName ->
+        fileName.replace("${version}", "").replace("-", "")
+    }
+
 }
 
 task clearBuild(type: Delete) {
-    delete 'build', 'out'
+    delete 'build', 'out', "tool/FranAmendApk.jar", "tool/libs"
 }
 
-task assembleRelease(dependsOn: [clearBuild, jar, copyJar, copyLibs, copyProperties])
+task assembleRelease(dependsOn: [clearBuild, jar, copy2ToolJar])
