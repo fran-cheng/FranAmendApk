@@ -2,9 +2,6 @@ package com.amend.apk;
 
 import com.amend.utils.FileUtils;
 
-import java.util.HashMap;
-import java.util.Map;
-
 /**
  * @author 程良明
  * @date 2022/3/30
@@ -19,14 +16,20 @@ public class Main {
         String packageName = null;
         boolean saveFiles = false;
         boolean changeOtherFiles = false;
+
         //         -w  workPath
-//         -p  packageName
-//         -s  saveFiles
-//         -c  saveFiles
+        //         -p  packageName
+        //         -s  saveFiles
+        //         -a  changeOtherFiles
 
 
         String lastKey = "";
-        for (String s : args) {
+        for (int i = 0; i < args.length; i++) {
+
+            String s = args[i];
+            if (i == args.length - 1 && s.startsWith("-")) {
+                lastKey = s;
+            }
             switch (lastKey) {
                 case "-w":
                     workPath = s;
@@ -37,7 +40,7 @@ public class Main {
                 case "-s":
                     saveFiles = true;
                     break;
-                case "-c":
+                case "-a":
                     changeOtherFiles = true;
                     break;
             }

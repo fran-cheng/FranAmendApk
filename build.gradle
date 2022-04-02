@@ -19,3 +19,38 @@ repositories {
 dependencies {
     implementation 'xpp3:xpp3:1.1.4c'
 }
+
+
+String outDir = 'out/FranAmendApk'
+
+jar {
+    String classPath = ""
+    configurations.runtimeClasspath.each {
+        classPath = classPath + "libs/" + it.name + " "
+    }
+    manifest {
+        attributes 'Main-Class': 'com.amend.apk.Main'
+        attributes 'Class-Path': classPath
+    }
+}
+
+task copyJar(type: Copy) {
+    from jar.outputs
+    into "${outDir}"
+}
+
+task copyLibs(type: Copy) {
+    from configurations.runtimeClasspath
+    into "${outDir}/libs"
+}
+
+task copyProperties(type: Copy) {
+    from 'properties'
+    into "${outDir}/properties"
+}
+
+task clearBuild(type: Delete) {
+    delete 'build', 'out'
+}
+
+task assembleRelease(dependsOn: [clearBuild, jar, copyJar, copyLibs, copyProperties])

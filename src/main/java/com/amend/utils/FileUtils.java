@@ -411,6 +411,7 @@ public class FileUtils {
         if (!saveFiles) {
             delDir(new File(linkPath(mWorkPath, new String[]{KEY_WORK_SPACE})));
         }
+        System.out.println("Done!");
 
     }
 
