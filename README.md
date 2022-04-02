@@ -14,3 +14,8 @@ java -jar FranAmendApk.jar -w G:\Java\public\app -p com.fran.test -s -a
        -a  changeOtherFiles 修改所有的smali文件的id，默认指修改R$开头的文件，使用该参数强制修改所以smali文件
 
 ```
+
+## 使用演示-修改id
+![使用演示-修改id](https://github.com/qq821978827/FranTool/blob/main/gif/amendId.gif)
+
+[工具集合](https://github.com/qq821978827/FranTool)
