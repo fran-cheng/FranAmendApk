@@ -1,0 +1,21 @@
+plugins {
+    id 'java'
+}
+
+group 'com.amend.apk'
+version '1.0-SNAPSHOT'
+
+sourceCompatibility = 1.8
+
+tasks.withType(JavaCompile) {
+    options.setEncoding("UTF-8")
+}
+
+repositories {
+    mavenCentral()
+    maven { url 'https://search.maven.org/' }
+}
+
+dependencies {
+    implementation 'xpp3:xpp3:1.1.4c'
+}
