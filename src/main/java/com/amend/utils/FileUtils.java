@@ -312,7 +312,7 @@ public class FileUtils {
                 if (resValue != null) {
 //                             从value 映射拿到最新的值，可能存在多个映射, 需要注意
                     String targetValue = mValueMap.get(resValue);
-                    if (mMultipleOldId.containsKey(resValue)) {
+                    if (!tempFile.getName().equals("R$styleable.smali") && mMultipleOldId.containsKey(resValue)) {
                         System.err.println("Path： " + tempFile);
                         System.err.println("替换的资源id可能存在冲突，请悉知");
 //                        使用包名下的文件的id来确定值
