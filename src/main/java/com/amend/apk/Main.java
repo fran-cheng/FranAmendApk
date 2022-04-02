@@ -26,7 +26,6 @@ public class Main {
 
 
         String lastKey = "";
-        Map<String, String> stringStringMap = new HashMap<>();
         for (String s : args) {
             switch (lastKey) {
                 case "-w":
