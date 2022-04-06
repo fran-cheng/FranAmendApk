@@ -65,9 +65,9 @@ public class FileUtils {
             usePackageTemplate = true;
         }
 
-        mOriginalPath = linkPath(mWorkPath, new String[]{KEY_WORK_SPACE, KEY_ORIGINAL});
-        mAmendPath = linkPath(mWorkPath, new String[]{KEY_WORK_SPACE, KEY_AMEND});
-        File publicFile = new File(linkPath(workPath, new String[]{"res", "values", "public.xml"}));
+        mOriginalPath = linkPath(mWorkPath, KEY_WORK_SPACE, KEY_ORIGINAL);
+        mAmendPath = linkPath(mWorkPath, KEY_WORK_SPACE, KEY_AMEND);
+        File publicFile = new File(linkPath(workPath, "res", "values", "public.xml"));
         try {
             mTypeNameMap = XmlPullParsePublicXml.parsePublicXml(publicFile);
         } catch (Exception e) {
@@ -77,7 +77,7 @@ public class FileUtils {
 
     public void execute() {
 
-        delDir(new File(linkPath(mWorkPath, new String[]{KEY_WORK_SPACE})));
+        delDir(new File(linkPath(mWorkPath, KEY_WORK_SPACE)));
 
         initAllFiles();
 
@@ -190,7 +190,7 @@ public class FileUtils {
                             mOriginalMap.put(resValue, typeAndName);
                             mValueMap.put(resValue, affirmId);
                             if (usePackageTemplate) {
-                                String key = linkPath(mPackageName.replace(".", File.separator), new String[]{"R$"});
+                                String key = linkPath(mPackageName.replace(".", File.separator), "R$");
                                 if (tempFile.getPath().contains(key)) {
                                     mPackageTemplate.put(typeAndName, resValue);
                                 }
@@ -219,11 +219,11 @@ public class FileUtils {
      * 拼接地址
      *
      * @param basePath 基础路径
-     * @param dentrys  拼接路径 String[]
+     * @param dentrys  拼接路径
      * @return path
      */
 
-    public String linkPath(String basePath, String[] dentrys) {
+    public String linkPath(String basePath, String... dentrys) {
         StringBuilder stringBuilder = new StringBuilder(basePath);
         for (String dentry : dentrys) {
             stringBuilder.append(File.separator);
@@ -409,7 +409,7 @@ public class FileUtils {
         }
 
         if (!saveFiles) {
-            delDir(new File(linkPath(mWorkPath, new String[]{KEY_WORK_SPACE})));
+            delDir(new File(linkPath(mWorkPath, KEY_WORK_SPACE)));
         }
         System.out.println("Done!");
 
