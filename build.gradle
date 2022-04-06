@@ -50,7 +50,7 @@ task copy2ToolJar(type: Copy, dependsOn: [copyJar, copyLibs]) {
     into "${outToolDir}"
 
     rename { String fileName ->
-        fileName.replace("${version}", "").replace("-", "")
+        fileName.replace("-"+"${version}", "")
     }
 
 }
